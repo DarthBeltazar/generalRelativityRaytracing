@@ -1,0 +1,186 @@
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#include "stb_image_write.h"
+#include <thread>
+#define TINYEXR_IMPLEMENTATION
+#include "tinyexr.h"
+
+#include <iostream>
+
+#include <vector>
+#include "Vec3.h"
+#include <cmath>
+#include <algorithm>
+#include <chrono>
+
+#include "clamp.h"
+#include "RayIntegrator.h"
+#include <fstream>
+struct Ray {
+    Vec3 origin, dir;
+    Ray(Vec3 origin, Vec3 dir): origin(origin), dir(dir) {}
+    Ray(): origin(Vec3()), dir(Vec3()) {}
+};
+
+struct HitInfo {
+    bool hit;
+    double t;
+    Vec3 pos;
+    Vec3 dir;
+    Vec3 normal;
+};
+
+Ray generateRay(const int px, const int py, double width, double height, double aspect, const Vec3 &origin, const double yaw, const double pitch) {
+    Vec3 forward(
+    cos(pitch) * sin(yaw),
+      sin(pitch),
+      -cos(pitch) * cos(yaw));
+    Vec3 right = forward.cross(Vec3(0, 1, 0)).normalize();
+    Vec3 up    = right.cross(forward);
+    double u = (2.0 * (px + 0.5) / width - 1.0) * aspect;
+    double v = 1.0 - 2.0 * (py + 0.5) / height;
+    Vec3 direction = (right * u + up * v + forward).normalize();
+    return Ray(origin, direction);
+}
+
+double square(double t) {return t*t;}
+
+HitInfo sphereHit(const Vec3 &spherePos, double r, const Ray &ray){
+    HitInfo HI;
+    const Vec3 lrPos = ray.origin - spherePos;
+    const double d = square(lrPos.dot( ray.dir)) - lrPos.dot(lrPos) + r*r;
+    HI.hit = d >= 0;
+    if (HI.hit){
+        HI.t = -lrPos.dot(ray.dir) - sqrt(d);
+        if (HI.t < 0) {HI.hit = false; return HI;}
+        const Vec3 rd = ray.dir * HI.t;
+        HI.normal = (lrPos + rd) * (1 / r);
+        HI.pos = ray.origin + rd;
+    }
+    return HI;
+}
+
+template <typename T>
+int sgn(T val) {
+    return (T(0) < val) - (val < T(0));
+}
+
+
+HitInfo traceRay (const double h, const double rs, const int px, const int py, double width, double height, double aspect, const Vec3 &bhpos, const double yaw, const double pitch) {
+    Ray ray = generateRay(px, py, width, height, aspect, Vec3(), yaw, pitch);
+    Vec3 r_vec = ray.origin - bhpos;
+    double r_cam = r_vec.length();
+    double b0s = r_vec.cross(ray.dir).squaredLength();
+    double bbs = (1 - rs / r_cam) / b0s;
+    double u0 = 1 / r_cam;
+
+    State state0(u0, -sqrt(rs*u0*u0*u0 - u0*u0 + bbs)*sgn(r_vec.dot(ray.dir)));
+    auto states = rk4(rs, h, state0);
+    HitInfo hi;
+    hi.hit = states.back().u >= 1/rs;
+    if (!hi.hit) {
+        Vec3 e_t = r_vec.cross(ray.dir).cross(r_vec).normalize();
+        Vec3 e_r = r_vec.normalize();
+        double size = static_cast<double>(states.size()-1);
+        Vec3 last = bhpos + (e_r * cos(size*h) + e_t * sin(size*h)) * (1 / states.back().u);
+        Vec3 plast = bhpos + (e_r * cos((size-1)*h) + e_t * sin((size-1)*h)) * (1 / states[states.size()-2].u);
+        hi.dir = (last - plast).normalize();
+    }
+    return hi;
+}
+
+std::vector<HitInfo> traceRays(const double h, const double rs, const int width, const int height, const Vec3 &bhpos, const double yaw, const double pitch) {
+    const unsigned int threadsNumber = std::thread::hardware_concurrency()-2;
+    const int rowsPerThread = height / threadsNumber;
+
+    std::vector<int> indexes;
+    for (int i = 0; i < height; i += rowsPerThread) {
+        indexes.push_back(i);
+    }
+    if (indexes.back() != height) indexes.push_back(height);
+
+
+    double widthd = width;
+    double heightd = height;
+    double aspect = widthd / heightd;
+
+    std::vector<HitInfo> output(width*height);
+    std::vector<std::thread> threads;
+    for (int i = 0; i < indexes.size() - 1;) {
+        auto start = indexes[i++];
+        auto end = indexes[i];
+
+        threads.push_back(std::thread([yaw, pitch, start, end, h, rs, width, widthd, heightd, aspect, &bhpos, &output]()-> void {
+            for (int y = start; y < end; y++) {
+                for (int x = 0; x < width; x++) {
+                    output[y*width+x] = traceRay(h, rs, x, y, widthd, heightd, aspect, bhpos, yaw, pitch);
+                }
+            }
+        }));
+    }
+    for (auto& t : threads) {
+        t.join();
+    }
+    return output;
+}
+
+double duration(std::chrono::time_point<std::chrono::steady_clock> t1, std::chrono::time_point<std::chrono::steady_clock> t2) {
+    return static_cast<std::chrono::duration<double, std::milli>>(t2 - t1).count();
+}
+
+float* img;
+int width, height;
+const int channels = 4;
+
+Vec3 backgroundColor(Vec3 dir) {
+    const double rPI = 1/3.14159265359;
+    int x = static_cast<int>((atan2(dir.z, dir.x)*rPI+1.5)*0.5 * width)%width;
+    int y = static_cast<int>((asin(dir.y)*rPI+0.5) * height)%height;
+    int index = (y*width + x)*channels;
+    return Vec3(pow(static_cast<double>(img[index]),0.45), pow(static_cast<double>(img[index+1]), 0.45), pow(static_cast<double>(img[index+2]), 0.45));
+}
+
+void writeImage(std::vector<HitInfo> his, const int WIDTH, const int HEIGHT, const char *filename) {
+    std::vector<unsigned char> data(WIDTH*HEIGHT*3);
+    for (int i = 0; i < WIDTH*HEIGHT; i++) {
+        auto hi = his[i];
+        if (hi.hit) {
+            data[i*3] = 0;
+            data[i*3+1] = 0;
+            data[i*3+2] = 0;
+            continue;
+        }
+
+        Vec3 color = backgroundColor(hi.dir);
+
+        data[i*3] = static_cast<unsigned char>(std::clamp(color.x*5, 0.0, 1.0) * 255);
+        data[i*3+1] = static_cast<unsigned char>(std::clamp(color.y*5, 0.0, 1.0) * 255);
+        data[i*3+2] = static_cast<unsigned char>(std::clamp(color.z*5, 0.0, 1.0) * 255);
+    }
+    std::cout << stbi_write_png(filename, WIDTH, HEIGHT, 3, data.data(), WIDTH*3) << std::endl;
+}
+
+int main() {
+    const double h = 0.01;
+    const int WIDTH = 1920;
+    const int HEIGHT = 1080;
+    auto t1 = std::chrono::high_resolution_clock::now();
+
+    const char* err = nullptr;
+    int ret = LoadEXR(&img, &width, &height, "../background.exr", &err);
+    if (ret != TINYEXR_SUCCESS) {
+        if (err) {
+            std::cerr << "EXR load error: " << err << std::endl;
+            FreeEXRErrorMessage(err);
+        }
+        return 1;
+    }
+    auto t2 = std::chrono::high_resolution_clock::now();
+    auto his = traceRays(h, 0.5, WIDTH, HEIGHT, Vec3(0, 0, -5), 0, 0);
+    auto t3 = std::chrono::high_resolution_clock::now();
+    writeImage(his, WIDTH, HEIGHT, "output.png");
+    auto t4 = std::chrono::high_resolution_clock::now();
+    std::cout << duration(t1, t2) << " " << duration(t2, t3) << " " << duration(t3, t4);
+
+    free(img);
+    return 0;
+}
