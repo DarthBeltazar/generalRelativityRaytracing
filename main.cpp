@@ -22,7 +22,7 @@ struct Ray {
 };
 
 struct HitInfo {
-    bool hit;
+    bool hit, discHit = false;
     double t;
     Vec3 pos;
     Vec3 dir;
@@ -65,6 +65,16 @@ int sgn(T val) {
 }
 
 
+std::vector<Vec3> statesToVec(const std::vector<State> &states, const Vec3 &bhpos, double h, const Ray &ray, const Vec3 &r_vec) {
+    Vec3 e_t = r_vec.cross(ray.dir).cross(r_vec).normalize();
+    Vec3 e_r = r_vec.normalize();
+    std::vector<Vec3> output(states.size());
+    for (int i = 0; i < states.size(); i++) {
+        output[i] = (e_r * cos(i*h) + e_t * sin(i*h)) * (1 / states[i].u);
+    }
+    return output;
+}
+
 HitInfo traceRay (const double h, const double rs, const int px, const int py, double width, double height, double aspect, const Vec3 &bhpos, const double yaw, const double pitch) {
     Ray ray = generateRay(px, py, width, height, aspect, Vec3(), yaw, pitch);
     Vec3 r_vec = ray.origin - bhpos;
@@ -77,13 +87,27 @@ HitInfo traceRay (const double h, const double rs, const int px, const int py, d
     auto states = rk4(rs, h, state0);
     HitInfo hi;
     hi.hit = states.back().u >= 1/rs;
+    std::vector<Vec3> positions = statesToVec(states, bhpos, h, ray, r_vec);
+    Vec3 prev = ray.origin - bhpos;
+    double max = 50 * rs * rs;
+    double min = 9 * rs * rs;
+    for (int i = 0; i < positions.size(); i++) {
+        Vec3 current = positions[i];
+        if (current.y*prev.y < 0) {
+            Vec3 delta = current - prev;
+            hi.pos = prev - delta * prev.y * (1. / delta.y);
+            double length = hi.pos.squaredLength();
+            if (length < min || length > max) {
+                prev = current;
+                continue;
+            }
+            hi.discHit = true;
+            break;
+        }
+        prev = current;
+    }
     if (!hi.hit) {
-        Vec3 e_t = r_vec.cross(ray.dir).cross(r_vec).normalize();
-        Vec3 e_r = r_vec.normalize();
-        double size = static_cast<double>(states.size()-1);
-        Vec3 last = bhpos + (e_r * cos(size*h) + e_t * sin(size*h)) * (1 / states.back().u);
-        Vec3 plast = bhpos + (e_r * cos((size-1)*h) + e_t * sin((size-1)*h)) * (1 / states[states.size()-2].u);
-        hi.dir = (last - plast).normalize();
+        hi.dir = (positions.back() - positions[positions.size()-2]).normalize();
     }
     return hi;
 }
@@ -139,17 +163,30 @@ Vec3 backgroundColor(Vec3 dir) {
     return Vec3(pow(static_cast<double>(img[index]),0.45), pow(static_cast<double>(img[index+1]), 0.45), pow(static_cast<double>(img[index+2]), 0.45));
 }
 
+Vec3 discColor(Vec3 pos) {
+    double r = pos.length();
+    double phi = atan2(pos.z,pos.x);
+    double c = sin(r*4)*cos(phi*10*3.1415926)*100 + 0.5;
+    return Vec3(c, c, c);
+}
+
 void writeImage(std::vector<HitInfo> his, const int WIDTH, const int HEIGHT, const char *filename) {
     std::vector<unsigned char> data(WIDTH*HEIGHT*3);
     for (int i = 0; i < WIDTH*HEIGHT; i++) {
         auto hi = his[i];
+        if (hi.discHit) {
+            Vec3 color = discColor(hi.pos);
+            data[i*3] = static_cast<unsigned char>(std::clamp(color.x, 0.0, 1.0) * 255);
+            data[i*3+1] = static_cast<unsigned char>(std::clamp(color.y, 0.0, 1.0) * 255);
+            data[i*3+2] = static_cast<unsigned char>(std::clamp(color.z, 0.0, 1.0) * 255);
+            continue;
+        }
         if (hi.hit) {
             data[i*3] = 0;
             data[i*3+1] = 0;
             data[i*3+2] = 0;
             continue;
         }
-
         Vec3 color = backgroundColor(hi.dir);
 
         data[i*3] = static_cast<unsigned char>(std::clamp(color.x*5, 0.0, 1.0) * 255);
@@ -175,7 +212,7 @@ int main() {
         return 1;
     }
     auto t2 = std::chrono::high_resolution_clock::now();
-    auto his = traceRays(h, 0.5, WIDTH, HEIGHT, Vec3(0, 0, -5), 0, 0);
+    auto his = traceRays(h, 0.5, WIDTH, HEIGHT, Vec3(0, -2, -5), 0, -0.4);
     auto t3 = std::chrono::high_resolution_clock::now();
     writeImage(his, WIDTH, HEIGHT, "output.png");
     auto t4 = std::chrono::high_resolution_clock::now();
