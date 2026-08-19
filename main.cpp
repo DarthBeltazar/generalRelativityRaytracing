@@ -53,7 +53,7 @@ struct Ray {
 struct HitInfo {
     bool hit, discHit = false;
     double t;
-    Vec3 pos;
+    std::vector<Vec3> pos;
     Vec3 dir;
     Vec3 normal;
 };
@@ -109,14 +109,8 @@ HitInfo traceRay (const double h, const double rs, const int px, const int py, d
         Vec3 current = positions[i];
         if (current.y*prev.y < 0) {
             Vec3 delta = current - prev;
-            hi.pos = prev - delta * prev.y * (1. / delta.y);
-            double length = hi.pos.squaredLength();
-            if (length < min || length > max) {
-                prev = current;
-                continue;
-            }
+            hi.pos.push_back(prev - delta * prev.y * (1. / delta.y));
             hi.discHit = true;
-            break;
         }
         prev = current;
     }
@@ -175,7 +169,7 @@ Vec3 backgroundColor(Vec3 dir) {
     int x = static_cast<int>((atan2(dir.z, dir.x)*rPI+1.5)*0.5 * width)%width;
     int y = static_cast<int>((asin(dir.y)*rPI+0.5) * height)%height;
     int index = (y*width + x)*channels;
-    return Vec3(pow(static_cast<double>(img[index]),0.45), pow(static_cast<double>(img[index+1]), 0.45), pow(static_cast<double>(img[index+2]), 0.45));
+    return Vec3(img[index], img[index+1], img[index+2]);
 }
 
 class PerlinNoise {
@@ -263,7 +257,7 @@ static PerlinNoise perlinGenerator(1337);
 
 float fbm_noise(float x, float z, float time) {
     float total = 0.0f;
-    float amplitude = 1.0f;
+    float amplitude = 2.0f;
     float frequency = 2.0f;
     float maxValue = 0.0f;
 
@@ -290,7 +284,7 @@ Vec3 discColor(Vec3 pos, double time) {
     double angle = atan2(pos.z,pos.x);
 
     const float R_IN = 1.5f;
-    const float R_OUT = 5;
+    const float R_OUT = 4.5;
 
     if (r < R_IN || r > R_OUT) return {0.0f, 0.0f, 0.0f};
 
@@ -332,7 +326,9 @@ void writeImage(std::vector<HitInfo> his, const int WIDTH, const int HEIGHT, con
         //     continue;
         // }
         if (hi.discHit) {
-            color = color + discColor(hi.pos, time);
+            for (const auto &p : hi.pos) {
+                color = color + discColor(p, time);
+            }
         }
         if (hi.hit) {
             data[i*3] = static_cast<unsigned char>(std::clamp(color.x, 0.0, 1.0) * 255);
@@ -340,7 +336,7 @@ void writeImage(std::vector<HitInfo> his, const int WIDTH, const int HEIGHT, con
             data[i*3+2] = static_cast<unsigned char>(std::clamp(color.z, 0.0, 1.0) * 255);
             continue;
         }
-        color = color + backgroundColor(hi.dir)*5;
+        color = (color + backgroundColor(hi.dir)*35).custom([](double x) -> double {return pow(x, 0.45);});
 
         data[i*3] = static_cast<unsigned char>(std::clamp(color.x, 0.0, 1.0) * 255);
         data[i*3+1] = static_cast<unsigned char>(std::clamp(color.y, 0.0, 1.0) * 255);
@@ -382,7 +378,7 @@ int main() {
     for (int i = 0; i < 360; i ++) {
         double phi = static_cast<double>(i-89) / 180 * 3.141593;
         bool invert = 0;
-        auto his = traceRays(h, 0.5, WIDTH, HEIGHT, Vec3(-5*sin(-phi), -0.2, -5*cos(-phi)), phi, -0.04);
+        auto his = traceRays(h, 0.5, WIDTH, HEIGHT, Vec3(-4*sin(-phi), -0.2, -4*cos(-phi)), phi, -0.05);
         std::string filename = "../seq/output_" + std::to_string(i) +".png";
         writeImage(his, WIDTH, HEIGHT, filename.c_str(), static_cast<double>(i)*0.05);
         std::cout << i << std::endl << std::endl;

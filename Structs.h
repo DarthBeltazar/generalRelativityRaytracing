@@ -1,4 +1,5 @@
 #pragma once
+#include <functional>
 
 class Vec3 {
 public:
@@ -18,6 +19,7 @@ public:
     double length() const;
     double squaredLength() const;
     Vec3 normalize() const;
+    Vec3 custom(std::function<double(double)>) const;
 
     void print() const;
 };

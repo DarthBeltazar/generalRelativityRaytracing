@@ -39,6 +39,10 @@ void Vec3::print() const {
     std::cout << "X: " << x << "  Y: " << y << "  Z: " << z << std::endl;
 }
 
+Vec3 Vec3::custom(std::function<double(double)> f) const{
+    return Vec3(f(x), f(y), f(z));
+}
+
 
 State State::operator+(const State &other) const {return State(u+other.u, w+other.w);}
 State State::operator*(double d) const {return State(u*d, w*d);}
