@@ -1,20 +1,47 @@
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_image_write.h"
-#include <thread>
 #define TINYEXR_IMPLEMENTATION
 #include "tinyexr.h"
 
-#include <iostream>
+#include "Structs.h"
 
+#include <thread>
+#include <iostream>
 #include <vector>
-#include "Vec3.h"
-#include <cmath>
 #include <algorithm>
 #include <chrono>
-
-#include "clamp.h"
-#include "RayIntegrator.h"
+#include <cmath>
 #include <fstream>
+#include <string>
+
+
+State f(const State &state, double rs) {
+    return State(state.w, -state.u + 1.5 * rs * state.u * state.u);
+}
+
+State rk4Step(State y, double rs, double h) {
+    State k1 = f(y, rs);
+    State k2 = f(y + k1*(h/2), rs);
+    State k3 = f(y + k2*(h/2), rs);
+    State k4 = f(y + k3*h, rs);
+    State y_next = y + (k1 + k2 + k2 + k3 + k3 + k4)*(h/6);
+    return y_next;
+}
+std::vector<State> rk4(double rs, double h, const State &state0) {
+    State y = state0;
+    std::vector<State> output;
+    output.reserve(1001);
+    output.push_back(y);
+    for (int i = 0; i < 1000; i++) {
+        y = rk4Step(y, rs, h);
+        output.push_back(y);
+        if (y.u >= 1/rs || y.u <= 0) {
+            break;
+        }
+    }
+    return output;
+}
+
 struct Ray {
     Vec3 origin, dir;
     Ray(Vec3 origin, Vec3 dir): origin(origin), dir(dir) {}
@@ -43,21 +70,6 @@ Ray generateRay(const int px, const int py, double width, double height, double 
 }
 
 double square(double t) {return t*t;}
-
-HitInfo sphereHit(const Vec3 &spherePos, double r, const Ray &ray){
-    HitInfo HI;
-    const Vec3 lrPos = ray.origin - spherePos;
-    const double d = square(lrPos.dot( ray.dir)) - lrPos.dot(lrPos) + r*r;
-    HI.hit = d >= 0;
-    if (HI.hit){
-        HI.t = -lrPos.dot(ray.dir) - sqrt(d);
-        if (HI.t < 0) {HI.hit = false; return HI;}
-        const Vec3 rd = ray.dir * HI.t;
-        HI.normal = (lrPos + rd) * (1 / r);
-        HI.pos = ray.origin + rd;
-    }
-    return HI;
-}
 
 template <typename T>
 int sgn(T val) {
@@ -109,6 +121,7 @@ HitInfo traceRay (const double h, const double rs, const int px, const int py, d
     if (!hi.hit) {
         hi.dir = (positions.back() - positions[positions.size()-2]).normalize();
     }
+    hi.t = states.size();
     return hi;
 }
 
@@ -166,19 +179,25 @@ Vec3 backgroundColor(Vec3 dir) {
 Vec3 discColor(Vec3 pos) {
     double r = pos.length();
     double phi = atan2(pos.z,pos.x);
-    double c = sin(r*4)*cos(phi*10*3.1415926)*100 + 0.5;
-    return Vec3(c, c, c);
+    double c = std::clamp(sin(r*6)*cos(phi*20)*100+0.2, 0., 1.);
+    return Vec3(c*(r - 1.5)*0.3, c*0.2, c*(3.7 - r)*0.3);
 }
 
 void writeImage(std::vector<HitInfo> his, const int WIDTH, const int HEIGHT, const char *filename) {
     std::vector<unsigned char> data(WIDTH*HEIGHT*3);
     for (int i = 0; i < WIDTH*HEIGHT; i++) {
         auto hi = his[i];
+        if (hi.t > 999) {
+            data[i*3] = 0;
+            data[i*3+1] = 255;
+            data[i*3+2] = 0;
+            continue;
+        }
         if (hi.discHit) {
             Vec3 color = discColor(hi.pos);
-            data[i*3] = static_cast<unsigned char>(std::clamp(color.x, 0.0, 1.0) * 255);
-            data[i*3+1] = static_cast<unsigned char>(std::clamp(color.y, 0.0, 1.0) * 255);
-            data[i*3+2] = static_cast<unsigned char>(std::clamp(color.z, 0.0, 1.0) * 255);
+            data[i*3] = static_cast<unsigned char>(color.x * 255);
+            data[i*3+1] = static_cast<unsigned char>(color.y * 255);
+            data[i*3+2] = static_cast<unsigned char>(color.z * 255);
             continue;
         }
         if (hi.hit) {
@@ -193,15 +212,10 @@ void writeImage(std::vector<HitInfo> his, const int WIDTH, const int HEIGHT, con
         data[i*3+1] = static_cast<unsigned char>(std::clamp(color.y*5, 0.0, 1.0) * 255);
         data[i*3+2] = static_cast<unsigned char>(std::clamp(color.z*5, 0.0, 1.0) * 255);
     }
-    std::cout << stbi_write_png(filename, WIDTH, HEIGHT, 3, data.data(), WIDTH*3) << std::endl;
+    stbi_write_png(filename, WIDTH, HEIGHT, 3, data.data(), WIDTH*3);
 }
 
-int main() {
-    const double h = 0.01;
-    const int WIDTH = 1920;
-    const int HEIGHT = 1080;
-    auto t1 = std::chrono::high_resolution_clock::now();
-
+void loadBackground() {
     const char* err = nullptr;
     int ret = LoadEXR(&img, &width, &height, "../background.exr", &err);
     if (ret != TINYEXR_SUCCESS) {
@@ -209,14 +223,37 @@ int main() {
             std::cerr << "EXR load error: " << err << std::endl;
             FreeEXRErrorMessage(err);
         }
-        return 1;
+        throw std::runtime_error("Background load failed");
     }
+}
+
+void renderImage(const int WIDTH, const int HEIGHT, const char *filename, const double h, const double rs, const Vec3 &bhpos, const double yaw, const double pitch) {
+    auto his = traceRays(h, rs, WIDTH, HEIGHT, bhpos, yaw, pitch);
+    writeImage(his, WIDTH, HEIGHT, filename);
+}
+
+int main() {
+    const double h = 0.01;
+    const int WIDTH = 1920;
+    const int HEIGHT = 1080;
+    auto t1 = std::chrono::high_resolution_clock::now();
+    loadBackground();
     auto t2 = std::chrono::high_resolution_clock::now();
-    auto his = traceRays(h, 0.5, WIDTH, HEIGHT, Vec3(0, -2, -5), 0, -0.4);
+    auto his = traceRays(h, 0.5, WIDTH, HEIGHT, Vec3(0, -1, -2.5), 0, -0.4);
     auto t3 = std::chrono::high_resolution_clock::now();
     writeImage(his, WIDTH, HEIGHT, "output.png");
     auto t4 = std::chrono::high_resolution_clock::now();
     std::cout << duration(t1, t2) << " " << duration(t2, t3) << " " << duration(t3, t4);
+    // const double r = 6;
+    // for (int i = 0; i < 180; i ++) {
+    //     double phi = static_cast<double>(i-89) / 180 * 3.141593;
+    //     bool invert = 0;
+    //     auto his = traceRays(h, 0.5, WIDTH, HEIGHT, Vec3(0, -sin(phi) * r, -cos(phi) * r), 3.141593 * invert, -phi);
+    //     std::string filename = "../seq/output_" + std::to_string(i) +".png";
+    //     writeImage(his, WIDTH, HEIGHT, filename.c_str());
+    //     std::cout << i << std::endl << std::endl;
+    //
+    // }
 
     free(img);
     return 0;

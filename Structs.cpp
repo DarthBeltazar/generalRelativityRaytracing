@@ -1,10 +1,8 @@
-//
-// Created by Александр Георгиев on 30.07.2026.
-//
+#include "Structs.h"
 
-#include "Vec3.h"
 #include <cmath>
 #include <iostream>
+#include <vector>
 
 Vec3::Vec3(double x, double y, double z) : x(x), y(y), z(z) {}
 Vec3::Vec3() : x(0), y(0), z(0) {}
@@ -26,11 +24,11 @@ Vec3 Vec3::cross(const Vec3 &other) const {
 }
 
 double Vec3::length() const {
-    return sqrt(this->dot(*this));
+    return sqrt(squaredLength());
 }
 
 double Vec3::squaredLength() const {
-    return this->dot(*this);
+    return dot(*this);
 }
 
 Vec3 Vec3::normalize() const {
@@ -40,3 +38,7 @@ Vec3 Vec3::normalize() const {
 void Vec3::print() const {
     std::cout << "X: " << x << "  Y: " << y << "  Z: " << z << std::endl;
 }
+
+
+State State::operator+(const State &other) const {return State(u+other.u, w+other.w);}
+State State::operator*(double d) const {return State(u*d, w*d);}

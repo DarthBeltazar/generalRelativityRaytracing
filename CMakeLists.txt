@@ -20,11 +20,8 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(tinyexr)
 
 add_executable(cppTraining main.cpp
-        Vec3.cpp
-        Vec3.h
-        clamp.h
-        RayIntegrator.cpp
-        RayIntegrator.h
+        Structs.cpp
+        Structs.h
         ${tinyexr_SOURCE_DIR}/deps/miniz/miniz.c
 )
 target_include_directories(cppTraining PRIVATE

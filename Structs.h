@@ -1,6 +1,3 @@
-//
-// Created by Александр Георгиев on 30.07.2026.
-//
 #pragma once
 
 class Vec3 {
@@ -23,4 +20,11 @@ public:
     Vec3 normalize() const;
 
     void print() const;
+};
+
+struct State {
+    double u, w;
+    State operator+(const State &other) const;
+    State operator*(double d) const;
+    State(double u, double w): u(u), w(w) {}
 };
