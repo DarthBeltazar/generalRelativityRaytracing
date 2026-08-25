@@ -1,4 +1,5 @@
 # General Relativity Raytracing
+![Облёт чёрной дыры](docs/flyby.gif)
 ## Структура проекта
 
 ```
@@ -9,7 +10,7 @@
 │   ├── main.cpp           # точка входа: рендер одного кадра + последовательности облёта
 │   ├── core/
 │   │   ├── Constants.h       # константы: PI, RECIP_PI
-│   │   └── Structs.h/.cpp    # базовые типы: Vec3 (x, y, z), State (u, w)
+│   │   └── Vec3.h/.cpp    # базовые типы: Vec3 (x, y, z)
 │   ├── physics/
 │   │   ├── physics.h/.cpp    # интегрирование геодезического уравнения, трассировка одного луча (traceRay), HitInfo
 │   └── render/
