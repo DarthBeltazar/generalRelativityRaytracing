@@ -6,6 +6,7 @@ public:
     ~Background();
 
     void load(const char *path);
+
     Vec3 sample(const Vec3 &dir) const;
 
 private:

@@ -8,7 +8,8 @@
 ├── src/
 │   ├── main.cpp           # точка входа: рендер одного кадра + последовательности облёта
 │   ├── core/
-│   │   ├── Structs.h/.cpp    # базовые типы: Vec3 (x, y, z), State (u, w)
+│   │   ├── Constants.h       # константы: PI, RECIP_PI
+│   │   └── Structs.h/.cpp    # базовые типы: Vec3 (x, y, z), State (u, w)
 │   ├── physics/
 │   │   ├── physics.h/.cpp    # интегрирование геодезического уравнения, трассировка одного луча (traceRay), HitInfo
 │   └── render/

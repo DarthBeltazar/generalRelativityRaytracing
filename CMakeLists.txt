@@ -21,6 +21,7 @@ FetchContent_MakeAvailable(tinyexr)
 
 add_executable(grRaytracing
         src/main.cpp
+        src/core/Constants.h
         src/core/Structs.cpp
         src/core/Structs.h
         ${tinyexr_SOURCE_DIR}/deps/miniz/miniz.c

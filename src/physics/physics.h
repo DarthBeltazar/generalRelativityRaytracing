@@ -5,7 +5,9 @@
 
 struct Ray {
     Vec3 origin, dir;
+
     Ray(Vec3 origin, Vec3 dir);
+
     Ray();
 };
 
