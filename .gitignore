@@ -1,5 +1,5 @@
 seq
 build
 build2
-cmake-build-debug
-cmake-build-release
+cmake-build-*
+tools/FlameGraph

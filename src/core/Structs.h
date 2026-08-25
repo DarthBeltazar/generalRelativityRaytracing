@@ -19,7 +19,7 @@ public:
     double length() const;
     double squaredLength() const;
     Vec3 normalize() const;
-    Vec3 custom(std::function<double(double)>) const;
+    Vec3 custom(const std::function<double(double)> &) const;
 
     void print() const;
 };
