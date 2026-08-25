@@ -1,4 +1,4 @@
-#include "Structs.h"
+#include "Vec3.h"
 
 #include <iostream>
 

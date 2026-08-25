@@ -1,4 +1,4 @@
 #pragma once
-#include "core/Structs.h"
+#include "core/Vec3.h"
 
 Vec3 discColor(Vec3 pos, double time);

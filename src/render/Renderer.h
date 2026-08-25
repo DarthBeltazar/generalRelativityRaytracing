@@ -1,5 +1,5 @@
 #pragma once
-#include "core/Structs.h"
+#include "core/Vec3.h"
 #include "physics/physics.h"
 #include "render/Background.h"
 

@@ -1,5 +1,5 @@
 #include "core/Constants.h"
-#include "core/Structs.h"
+#include "core/Vec3.h"
 #include "render/Background.h"
 #include "render/Renderer.h"
 

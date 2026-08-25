@@ -9,6 +9,15 @@ Ray::Ray() : origin(Vec3()), dir(Vec3()) {
 }
 
 namespace {
+    struct State {
+        double u, w;
+        State operator+(const State &other) const { return State(u + other.u, w + other.w); }
+        State operator*(double d) const { return State(u * d, w * d); }
+
+        State(double u, double w) : u(u), w(w) {
+        }
+    };
+
     State f(const State &state, double rs) {
         return State(state.w, -state.u + 1.5 * rs * state.u * state.u);
     }

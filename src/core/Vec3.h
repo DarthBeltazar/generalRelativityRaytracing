@@ -48,12 +48,3 @@ public:
 
     void print() const;
 };
-
-struct State {
-    double u, w;
-    State operator+(const State &other) const { return State(u + other.u, w + other.w); }
-    State operator*(double d) const { return State(u * d, w * d); }
-
-    State(double u, double w) : u(u), w(w) {
-    }
-};
