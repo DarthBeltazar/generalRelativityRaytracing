@@ -30,6 +30,7 @@ PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 BUILD_DIR="$PROJECT_DIR/cmake-build-wsl-profile"
 SCRATCH_DIR="/tmp/gr-profile"
 FRAMES="${1:-6}"
+export DEBUGINFOD_URLS=
 
 if ! command -v perf >/dev/null 2>&1; then
     echo "perf not found. Install it first (needs your sudo password):" >&2

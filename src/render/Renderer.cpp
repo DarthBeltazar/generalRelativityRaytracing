@@ -19,24 +19,28 @@ namespace {
         Vec3 direction = (right * u + up * v + forward).normalize();
         return Ray(origin, direction);
     }
+
+    struct Tile {
+        int x0, y0, x1, y1; //[x0, x1), [y0, y1)
+        Tile (int x0, int x1, int y0, int y1): x0(x0), x1(x1), y0(y0), y1(y1) {};
+    };
 }
 
 std::vector<HitInfo> traceRays(const double h, const double rs, const int width, const int height, const Vec3 &bhpos,
                                const double yaw, const double pitch) {
     const unsigned int threadsNumber = std::max(1u, std::thread::hardware_concurrency() - 2);
-    const int rowsPerThread = height / threadsNumber;
 
-    std::vector<int> indexes;
-    for (int i = 0; i < height; i += rowsPerThread) {
-        indexes.push_back(i);
+    constexpr int tileSize = 32;
+    std::vector<Tile> tiles;
+    for (int y = 0; y < height;) {
+        const int y1 = std::min(y + tileSize, height);
+        for (int x = 0; x < width;) {
+            const int x1 = std::min(x + tileSize, width);
+            tiles.push_back(Tile(x, x1, y, y1));
+            x = x1;
+        }
+        y = y1;
     }
-    if (indexes.back() != height) indexes.push_back(height);
-
-
-    double widthd = width;
-    double heightd = height;
-    double aspect = widthd / heightd;
-
     Vec3 forward(
         cos(pitch) * sin(yaw),
         sin(pitch),
@@ -45,17 +49,25 @@ std::vector<HitInfo> traceRays(const double h, const double rs, const int width,
     Vec3 up = right.cross(forward);
 
     std::vector<HitInfo> output(width * height);
-    std::vector<std::thread> threads;
-    for (int i = 0; i < indexes.size() - 1;) {
-        auto start = indexes[i++];
-        auto end = indexes[i];
 
-        threads.push_back(std::thread(
-            [start, end, h, rs, width, widthd, heightd, aspect, &forward, &right, &up, &bhpos, &output]()-> void {
-                for (int y = start; y < end; y++) {
-                    for (int x = 0; x < width; x++) {
-                        Ray ray = generateRay(x, y, widthd, heightd, aspect, Vec3(), forward, right, up);
-                        output[y * width + x] = traceRay(h, rs, bhpos, ray);
+    double widthd = width;
+    double heightd = height;
+    double aspect = widthd / heightd;
+    std::vector<std::thread> threads(threadsNumber);
+    std::atomic<int> nextIndex = 0;
+    for (int i = 0; i < threadsNumber; i++) {
+        threads[i] = (std::thread(
+            [&]()-> void {
+                int index;
+                for (int i = 0; i < tiles.size(); i++) {
+                    index = nextIndex++;
+                    if (index >= tiles.size()) break;
+                    Tile tile = tiles[index];
+                    for (int y = tile.y0; y < tile.y1; y++) {
+                        for (int x = tile.x0; x < tile.x1; x++) {
+                            Ray ray = generateRay(x, y, widthd, heightd, aspect, Vec3(), forward, right, up);
+                            output[y * width + x] = traceRay(h, rs, bhpos, ray);
+                        }
                     }
                 }
             }));
