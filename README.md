@@ -12,12 +12,15 @@
 │   │   ├── Constants.h       # константы: PI, RECIP_PI
 │   │   └── Vec3.h/.cpp       # базовые типы: Vec3 (x, y, z)
 │   ├── physics/
-│   │   ├── physics.h/.cpp    # интегрирование геодезического уравнения, трассировка одного луча (traceRay), HitInfo
-│   └── render/
-│       ├── Renderer.h/.cpp      # трассировка всех лучей кадра (traceRays), запись PNG (writeImage/renderImage)
-│       ├── Background.h/.cpp    # загрузка background.exr и сэмплирование фона по направлению луча
-│       ├── AccretionDisc.h/.cpp # цвет точки аккреционного диска (discColor)
-│       └── PerlinNoise.h/.cpp   # процедурный шум, используется для текстуры диска
+│   │   └── physics.h/.cpp    # интегрирование геодезического уравнения, трассировка одного луча (traceRay), HitInfo
+│   ├── render/
+│   │   ├── Renderer.h/.cpp      # трассировка всех лучей кадра (traceRays), запись PNG (writeImage/renderImage)
+│   │   ├── Background.h/.cpp    # загрузка background.exr и сэмплирование фона по направлению луча
+│   │   ├── AccretionDisc.h/.cpp # цвет точки аккреционного диска (discColor)
+│   │   ├── Camera.h/.cpp        # базис и генерация луча
+│   │   └── PerlinNoise.h/.cpp   # процедурный шум, используется для текстуры диска
+│   └── tools/
+│       └── PixelStepTrace.cpp   # диагностика одного луча, сохранение в csv
 ├── tools/
 │   ├── wsl-profile.sh     # сборка + профилирование через perf в WSL
 │   └── FlameGraph/        # скрипты для флеймграфов (подтягиваются скриптом, в git не хранятся)
