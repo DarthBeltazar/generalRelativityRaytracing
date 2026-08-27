@@ -1,6 +1,7 @@
 #pragma once
 #include "core/Vec3.h"
 
+#include <functional>
 #include <vector>
 
 struct Ray {
@@ -19,4 +20,9 @@ struct HitInfo {
     Vec3 dir;
 };
 
-HitInfo traceRay(double h, double rs, const Vec3 &bhpos, const Ray &ray);
+// Called after each accepted RKF45 step with (step index, distance to the black hole,
+// step size h requested for that step). Used for diagnostics only - pass nullptr (the
+// default) on the hot rendering path to skip it entirely.
+using StepObserver = std::function<void(int step, double distance, double h)>;
+
+HitInfo traceRay(double h, double rs, const Vec3 &bhpos, const Ray &ray, const StepObserver &observer = nullptr);

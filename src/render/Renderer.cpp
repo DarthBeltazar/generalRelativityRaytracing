@@ -3,6 +3,7 @@
 
 #include "Renderer.h"
 #include "AccretionDisc.h"
+#include "Camera.h"
 #include "physics/physics.h"
 
 #include <thread>
@@ -10,16 +11,6 @@
 #include <cmath>
 
 namespace {
-    // forward/right/up depend only on yaw/pitch, which are constant for the whole
-    // frame - computed once by the caller instead of on everyone of the 2M+ pixels
-    Ray generateRay(const int px, const int py, double width, double height, double aspect, const Vec3 &origin,
-                    const Vec3 &forward, const Vec3 &right, const Vec3 &up) {
-        double u = (2.0 * (px + 0.5) / width - 1.0) * aspect;
-        double v = 1.0 - 2.0 * (py + 0.5) / height;
-        Vec3 direction = (right * u + up * v + forward).normalize();
-        return Ray(origin, direction);
-    }
-
     struct Tile {
         int x0, y0, x1, y1; //[x0, x1), [y0, y1)
         Tile (int x0, int x1, int y0, int y1): x0(x0), x1(x1), y0(y0), y1(y1) {};
@@ -41,12 +32,7 @@ std::vector<HitInfo> traceRays(const double h, const double rs, const int width,
         }
         y = y1;
     }
-    Vec3 forward(
-        cos(pitch) * sin(yaw),
-        sin(pitch),
-        -cos(pitch) * cos(yaw));
-    Vec3 right = forward.cross(Vec3(0, 1, 0)).normalize();
-    Vec3 up = right.cross(forward);
+    CameraBasis basis = computeCameraBasis(yaw, pitch);
 
     std::vector<HitInfo> output(width * height);
 
@@ -65,7 +51,7 @@ std::vector<HitInfo> traceRays(const double h, const double rs, const int width,
                     Tile tile = tiles[index];
                     for (int y = tile.y0; y < tile.y1; y++) {
                         for (int x = tile.x0; x < tile.x1; x++) {
-                            Ray ray = generateRay(x, y, widthd, heightd, aspect, Vec3(), forward, right, up);
+                            Ray ray = generateRay(x, y, widthd, heightd, aspect, Vec3(), basis);
                             output[y * width + x] = traceRay(h, rs, bhpos, ray);
                         }
                     }

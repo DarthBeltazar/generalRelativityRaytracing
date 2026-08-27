@@ -32,7 +32,7 @@ namespace {
     }
 
     template<typename F>
-    State rkf45Step(State y, double rs, double &h, double tol, F accept) {
+    State rkf45Step(State y, double rs, double &h, double atol, double rtol, F accept) {
         bool isDisaccepted = false;
         while (true) {
             const double s = 0.84;
@@ -66,11 +66,13 @@ namespace {
                             + k4 * (-2197.0 / 75240.0)
                             + k5 * (1.0 / 50.0)
                             + k6 * (2.0 / 55.0);
-                double err_norm = std::max(abs(error.u), abs(error.w));
+                const double tol_u = atol + rtol * abs(y_next.u);
+                const double tol_w = atol + rtol * abs(y_next.w);
+                const double err_norm = std::max(abs(error.u)/tol_u, abs(error.w)/tol_w);
 
-                double h_opt = s * h * std::pow(tol / (err_norm + 1e-15), 0.25);
+                const double h_opt = s * h * std::pow(1 / (err_norm + 1e-15), 0.2);
                 h = h * std::max(0.1, std::min(4.0, h_opt / h));
-                if (err_norm <= tol) {
+                if (err_norm <= 1) {
                     return y_next;
                 }
             } else {
@@ -89,7 +91,7 @@ namespace {
     }
 }
 
-HitInfo traceRay(const double h0, const double rs, const Vec3 &bhpos, const Ray &ray) {
+HitInfo traceRay(const double h0, const double rs, const Vec3 &bhpos, const Ray &ray, const StepObserver &observer) {
     Vec3 r_vec = ray.origin - bhpos;
     double r_cam = r_vec.length();
     double b0s = r_vec.cross(ray.dir).squaredLength();
@@ -118,7 +120,8 @@ HitInfo traceRay(const double h0, const double rs, const Vec3 &bhpos, const Ray 
         double prevCosI = cosI;
         double prevSinI = sinI;
         prevPrev = current;
-        y = rkf45Step(y, rs, h, 1e-7, [&](const State &s) -> bool {
+        const double h_used = h;
+        y = rkf45Step(y, rs, h, 1e-7, 1e-7, [&](const State &s) -> bool {
             const double cosH = 1 - 0.5 * h * h;
             const double sinH = h - 1./6 * h * h * h;
             cosI = prevCosI * cosH - prevSinI * sinH;
@@ -127,6 +130,9 @@ HitInfo traceRay(const double h0, const double rs, const Vec3 &bhpos, const Ray 
             return (current.y * prev.y > -current.squaredLength()/(rs*rs));
         });
         steps++;
+        if (observer) {
+            observer(steps, current.length(), h_used);
+        }
 
         if (current.y * prev.y < 0) {
             Vec3 delta = current - prev;

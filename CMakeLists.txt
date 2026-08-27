@@ -35,6 +35,8 @@ add_executable(grRaytracing
         src/render/AccretionDisc.h
         src/render/Renderer.cpp
         src/render/Renderer.h
+        src/render/Camera.cpp
+        src/render/Camera.h
 )
 target_include_directories(grRaytracing PRIVATE
         src
@@ -43,13 +45,19 @@ target_include_directories(grRaytracing PRIVATE
         ${tinyexr_SOURCE_DIR}/deps/miniz
 )
 
-# Keep frame pointers so profilers (perf, gprof) can unwind the call stack in release builds.
+add_executable(trace_pixel_step
+        src/tools/PixelStepTrace.cpp
+        src/core/Vec3.cpp
+        src/core/Vec3.h
+        src/physics/physics.cpp
+        src/physics/physics.h
+        src/render/Camera.cpp
+        src/render/Camera.h
+)
+target_include_directories(trace_pixel_step PRIVATE src)
+
 if (CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
     target_compile_options(grRaytracing PRIVATE -fno-omit-frame-pointer)
 endif()
 
-# Lets the app find its bundled assets (background.exr, seq/) by source location
-# instead of by a relative "../" path, which breaks whenever the build directory
-# isn't a direct sibling of the source tree (e.g. a WSL-native build dir profiling
-# a project that lives on the Windows-mounted filesystem).
 target_compile_definitions(grRaytracing PRIVATE GR_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
