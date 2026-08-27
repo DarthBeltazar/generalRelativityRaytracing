@@ -1,0 +1,50 @@
+version: 1
+exclude: []
+force_include: []
+collapse_siblings: []
+entries:
+  src/:
+    description: ''
+  src/core/:
+    description: ''
+  src/core/Constants.h:
+    description: 'константы: PI, RECIP_PI'
+  src/core/Vec3.h:
+    description: 'базовые типы: Vec3 (x, y, z)'
+    pair_with: src/core/Vec3.cpp
+  src/physics/:
+    description: ''
+  src/physics/physics.h:
+    description: интегрирование геодезического уравнения, трассировка одного луча (traceRay), HitInfo
+    pair_with: src/physics/physics.cpp
+  src/render/:
+    description: ''
+  src/render/AccretionDisc.h:
+    description: цвет точки аккреционного диска (discColor)
+    pair_with: src/render/AccretionDisc.cpp
+  src/render/Background.h:
+    description: загрузка background.exr и сэмплирование фона по направлению луча
+    pair_with: src/render/Background.cpp
+  src/render/Camera.h:
+    description: базис и генерация луча
+    pair_with: src/render/Camera.cpp
+  src/render/PerlinNoise.h:
+    description: процедурный шум, используется для текстуры диска
+    pair_with: src/render/PerlinNoise.cpp
+  src/render/Renderer.h:
+    description: трассировка всех лучей кадра (traceRays), запись PNG (writeImage/renderImage)
+    pair_with: src/render/Renderer.cpp
+  src/tools/:
+    description: ''
+  src/tools/PixelStepTrace.cpp:
+    description: диагностика одного луча, сохранение в csv
+  src/main.cpp:
+    description: 'точка входа: рендер одного кадра + последовательности облёта'
+  tools/:
+    description: ''
+  tools/wsl-profile.sh:
+    description: сборка + профилирование через perf в WSL
+  background.exr:
+    description: HDR-панорама фона, на который проецируются улетевшие лучи
+  CMakeLists.txt:
+    description: конфигурация сборки, подтягивает stb и tinyexr через FetchContent
