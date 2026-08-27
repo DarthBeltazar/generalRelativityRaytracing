@@ -88,7 +88,7 @@ void writeImage(const std::vector<HitInfo> &his, const int WIDTH, const int HEIG
     for (int i = 0; i < WIDTH * HEIGHT; i++) {
         const auto &hi = his[i];
         Vec3 color(0, 0, 0);
-        // if (hi.t > 999) {
+        // if (hi.t > 50) {
         //     data[i*3] = 0;
         //     data[i*3+1] = 255;
         //     data[i*3+2] = 0;
