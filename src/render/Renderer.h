@@ -14,4 +14,7 @@ void writeImage(const std::vector<HitInfo> &his, int WIDTH, int HEIGHT, const ch
 void renderImage(int WIDTH, int HEIGHT, const char *filename, double h, double rs, const Vec3 &bhpos, double yaw,
                  double pitch, double time, const Background &background);
 
+std::vector<unsigned char> shade(const std::vector<HitInfo> &his, int WIDTH, int HEIGHT, double time,
+                                 const Background &background);
+
 double duration(std::chrono::high_resolution_clock::time_point t1, std::chrono::high_resolution_clock::time_point t2);

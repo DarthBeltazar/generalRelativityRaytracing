@@ -68,8 +68,8 @@ double duration(std::chrono::high_resolution_clock::time_point t1, std::chrono::
     return static_cast<std::chrono::duration<double, std::milli>>(t2 - t1).count();
 }
 
-void writeImage(const std::vector<HitInfo> &his, const int WIDTH, const int HEIGHT, const char *filename, double time,
-                const Background &background) {
+std::vector<unsigned char> shade(const std::vector<HitInfo> &his, const int WIDTH, const int HEIGHT, double time,
+                const Background &background)  {
     std::vector<unsigned char> data(WIDTH * HEIGHT * 3);
     for (int i = 0; i < WIDTH * HEIGHT; i++) {
         const auto &hi = his[i];
@@ -97,6 +97,12 @@ void writeImage(const std::vector<HitInfo> &his, const int WIDTH, const int HEIG
         data[i * 3 + 1] = static_cast<unsigned char>(std::clamp(color.y, 0.0, 1.0) * 255);
         data[i * 3 + 2] = static_cast<unsigned char>(std::clamp(color.z, 0.0, 1.0) * 255);
     }
+    return data;
+}
+
+void writeImage(const std::vector<HitInfo> &his, const int WIDTH, const int HEIGHT, const char *filename, double time,
+                const Background &background) {
+    const auto data = shade(his, WIDTH, HEIGHT, time, background);
     stbi_write_png(filename, WIDTH, HEIGHT, 3, data.data(), WIDTH * 3);
 }
 
