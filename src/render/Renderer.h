@@ -6,7 +6,9 @@
 #include <chrono>
 #include <vector>
 
-std::vector<HitInfo> traceRays(double h, double rs, int width, int height, const Vec3 &bhpos, double yaw, double pitch);
+#include "Camera.h"
+
+std::vector<HitInfo> traceRays(double h, double rs, int width, int height, const Vec3 &bhpos, const CameraBasis &basis);
 
 void writeImage(const std::vector<HitInfo> &his, int WIDTH, int HEIGHT, const char *filename, double time,
                 const Background &background);

@@ -12,8 +12,8 @@
 #include "core/Constants.h"
 
 int main(int, char**) {
-    const int RW = 1440;
-    const int RH = 810;
+    const int RW = 960;
+    const int RH = 540;
     Background background;
     background.load(GR_SOURCE_DIR "/background.exr");
 
@@ -24,11 +24,14 @@ int main(int, char**) {
     SDL_Texture *tex = SDL_CreateTexture(ren, SDL_PIXELFORMAT_RGB24, SDL_TEXTUREACCESS_STREAMING, RW, RH);
 
     bool running = true;
-    bool dirty = true;
 
     double yaw = 0, pitch =- 0.04;
+    Vec3 pos(0, -0.4, -5);
     const double sens = 0.002;
-
+    const double speed = 0.002;
+    const auto t0 = std::chrono::high_resolution_clock::now();
+    double dt;
+    auto prev = t0;
     while (running) {
         SDL_Event e;
         while (SDL_PollEvent(&e)) {
@@ -37,15 +40,30 @@ int main(int, char**) {
                 yaw += e.motion.xrel * sens;
                 pitch += e.motion.yrel * sens;
                 pitch = std::clamp(pitch, -PI*0.5, PI*0.5);
-                dirty = true;
             }
         }
-        if (dirty) {
-            std::vector<unsigned char> px = shade(traceRays(0.01, 0.5, RW, RH, Vec3(0, -0.4, -5), yaw, pitch),
-                                          RW, RH, 0.0, background);
-            SDL_UpdateTexture(tex, nullptr, px.data(), RW * 3);
-            dirty = false;
+
+        const auto t1 = std::chrono::high_resolution_clock::now();
+        dt = duration(prev, t1);
+        const bool *keys = SDL_GetKeyboardState(nullptr);
+        CameraBasis basis = computeCameraBasis(yaw, pitch);
+        if (keys[SDL_SCANCODE_W]) {
+            pos = pos - basis.forward*dt*speed;
         }
+        if (keys[SDL_SCANCODE_S]) {
+            pos = pos + basis.forward*dt*speed;
+        }
+        if (keys[SDL_SCANCODE_A]) {
+            pos = pos + basis.right*dt*speed;
+        }
+        if (keys[SDL_SCANCODE_D]) {
+            pos = pos - basis.right*dt*speed;
+        }
+        prev = t1;
+        std::vector<unsigned char> px = shade(traceRays(0.01, 0.5, RW, RH, pos, basis),
+                                              RW, RH, duration(t0, t1)*0.0003, background);
+        SDL_UpdateTexture(tex, nullptr, px.data(), RW * 3);
+
         SDL_RenderClear(ren);
         SDL_RenderTexture(ren, tex, nullptr, nullptr);
         SDL_RenderPresent(ren);

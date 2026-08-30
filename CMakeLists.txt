@@ -1,4 +1,5 @@
 cmake_minimum_required(VERSION 3.31)
+set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded")
 project(grRaytracing)
 
 set(CMAKE_CXX_STANDARD 20)
@@ -25,6 +26,8 @@ FetchContent_Declare(
         GIT_TAG release-3.4.14
         GIT_SHALLOW TRUE
 )
+set(SDL_STATIC ON CACHE BOOL "" FORCE)
+set(SDL_SHARED OFF CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(SDL3)
 
 add_executable(grRaytracing
@@ -89,10 +92,10 @@ target_include_directories(viewer PRIVATE
         ${tinyexr_SOURCE_DIR}
         ${tinyexr_SOURCE_DIR}/deps/miniz
 )
-target_link_libraries(viewer PRIVATE SDL3::SDL3)
+target_link_libraries(viewer PRIVATE SDL3::SDL3-static)
 
 if (CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
-    target_compile_options(grRaytracing PRIVATE -fno-omit-frame-pointer)
+    target_compile_options(grRaytracing PRIVATE -fno-omit-frame-pointer -static -static-libgcc -static-libstdc++)
 endif()
 
 target_compile_definitions(grRaytracing PRIVATE GR_SOURCE_DIR="${CMAKE_SOURCE_DIR}")

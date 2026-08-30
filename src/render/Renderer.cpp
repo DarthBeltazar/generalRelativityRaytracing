@@ -18,7 +18,7 @@ namespace {
 }
 
 std::vector<HitInfo> traceRays(const double h, const double rs, const int width, const int height, const Vec3 &bhpos,
-                               const double yaw, const double pitch) {
+                               const CameraBasis &basis) {
     const unsigned int threadsNumber = std::max(1u, std::thread::hardware_concurrency() - 2);
 
     constexpr int tileSize = 32;
@@ -32,7 +32,6 @@ std::vector<HitInfo> traceRays(const double h, const double rs, const int width,
         }
         y = y1;
     }
-    CameraBasis basis = computeCameraBasis(yaw, pitch);
 
     std::vector<HitInfo> output(width * height);
 
@@ -140,6 +139,6 @@ void writeImage(const std::vector<HitInfo> &his, const int WIDTH, const int HEIG
 
 void renderImage(const int WIDTH, const int HEIGHT, const char *filename, const double h, const double rs,
                  const Vec3 &bhpos, const double yaw, const double pitch, double time, const Background &background) {
-    auto his = traceRays(h, rs, WIDTH, HEIGHT, bhpos, yaw, pitch);
+    auto his = traceRays(h, rs, WIDTH, HEIGHT, bhpos, computeCameraBasis(yaw, pitch));
     writeImage(his, WIDTH, HEIGHT, filename, time, background);
 }
