@@ -122,8 +122,15 @@ HitInfo traceRay(const double h0, const double rs, const Vec3 &bhpos, const Ray 
         prevPrev = current;
         const double h_used = h;
         y = rkf45Step(y, rs, h, 1e-7, 1e-7, [&](const State &s) -> bool {
-            const double cosH = 1 - 0.5 * h * h;
-            const double sinH = h - 1./6 * h * h * h;
+            double cosH, sinH;
+            if (h < 0.1) {
+                cosH = 1 - 0.5 * h * h;
+                sinH = h - 1./6 * h * h * h;
+            }
+            else {
+                cosH = cos(h);
+                sinH = sin(h);
+            }
             cosI = prevCosI * cosH - prevSinI * sinH;
             sinI = prevSinI * cosH + prevCosI * sinH;
             current = positionAt(s);
@@ -134,7 +141,7 @@ HitInfo traceRay(const double h0, const double rs, const Vec3 &bhpos, const Ray 
             observer(steps, current.length(), h_used);
         }
 
-        if (current.y * prev.y < 0) {
+        if (current.y * prev.y < 0 && y.u > 0) {
             Vec3 delta = current - prev;
             hi.pos.push_back(prev - delta * prev.y * (1. / delta.y));
             hi.discHit = true;

@@ -71,31 +71,63 @@ double duration(std::chrono::high_resolution_clock::time_point t1, std::chrono::
 std::vector<unsigned char> shade(const std::vector<HitInfo> &his, const int WIDTH, const int HEIGHT, double time,
                 const Background &background)  {
     std::vector<unsigned char> data(WIDTH * HEIGHT * 3);
-    for (int i = 0; i < WIDTH * HEIGHT; i++) {
-        const auto &hi = his[i];
-        Vec3 color(0, 0, 0);
-        // if (hi.t > 50) {
-        //     data[i*3] = 0;
-        //     data[i*3+1] = 255;
-        //     data[i*3+2] = 0;
-        //     continue;
-        // }
-        if (hi.discHit) {
-            for (const auto &p: hi.pos) {
-                color = color + discColor(p, time);
-            }
-        }
-        if (hi.hit) {
-            data[i * 3] = static_cast<unsigned char>(std::clamp(color.x, 0.0, 1.0) * 255);
-            data[i * 3 + 1] = static_cast<unsigned char>(std::clamp(color.y, 0.0, 1.0) * 255);
-            data[i * 3 + 2] = static_cast<unsigned char>(std::clamp(color.z, 0.0, 1.0) * 255);
-            continue;
-        }
-        color = (color + background.sample(hi.dir) * 35).custom([](double x) -> double { return pow(x, 0.45); });
+    const unsigned int threadsNumber = std::max(1u, std::thread::hardware_concurrency() - 2);
 
-        data[i * 3] = static_cast<unsigned char>(std::clamp(color.x, 0.0, 1.0) * 255);
-        data[i * 3 + 1] = static_cast<unsigned char>(std::clamp(color.y, 0.0, 1.0) * 255);
-        data[i * 3 + 2] = static_cast<unsigned char>(std::clamp(color.z, 0.0, 1.0) * 255);
+    constexpr int tileSize = 64;
+    std::vector<Tile> tiles;
+    for (int y = 0; y < HEIGHT;) {
+        const int y1 = std::min(y + tileSize, HEIGHT);
+        for (int x = 0; x < WIDTH;) {
+            const int x1 = std::min(x + tileSize, WIDTH);
+            tiles.push_back(Tile(x, x1, y, y1));
+            x = x1;
+        }
+        y = y1;
+    }
+    std::vector<std::thread> threads(threadsNumber);
+    std::atomic<int> nextIndex = 0;
+    for (int i = 0; i < threadsNumber; i++) {
+        threads[i] = (std::thread(
+            [&]()-> void {
+                int index;
+                for (int j = 0; j < tiles.size(); j++) {
+                    index = nextIndex++;
+                    if (index >= tiles.size()) break;
+                    Tile tile = tiles[index];
+                    for (int y = tile.y0; y < tile.y1; y++) {
+                        for (int x = tile.x0; x < tile.x1; x++) {
+                            int i = y*WIDTH+x;
+                            const auto &hi = his[i];
+                            Vec3 color(0, 0, 0);
+                            // if (hi.t > 50) {
+                            //     data[i*3] = 0;
+                            //     data[i*3+1] = 255;
+                            //     data[i*3+2] = 0;
+                            //     continue;
+                            // }
+                            if (hi.discHit) {
+                                for (const auto &p: hi.pos) {
+                                    color = color + discColor(p, time);
+                                }
+                            }
+                            if (hi.hit) {
+                                data[i * 3] = static_cast<unsigned char>(std::clamp(color.x, 0.0, 1.0) * 255);
+                                data[i * 3 + 1] = static_cast<unsigned char>(std::clamp(color.y, 0.0, 1.0) * 255);
+                                data[i * 3 + 2] = static_cast<unsigned char>(std::clamp(color.z, 0.0, 1.0) * 255);
+                                continue;
+                            }
+                            color = (color + background.sample(hi.dir) * 35).custom([](double x) -> double { return pow(x, 0.45); });
+
+                            data[i * 3] = static_cast<unsigned char>(std::clamp(color.x, 0.0, 1.0) * 255);
+                            data[i * 3 + 1] = static_cast<unsigned char>(std::clamp(color.y, 0.0, 1.0) * 255);
+                            data[i * 3 + 2] = static_cast<unsigned char>(std::clamp(color.z, 0.0, 1.0) * 255);
+                        }
+                    }
+                }
+            }));
+    }
+    for (auto &t: threads) {
+        t.join();
     }
     return data;
 }
