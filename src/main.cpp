@@ -30,14 +30,14 @@ int main() {
     Background background;
     background.load(GR_SOURCE_DIR "/background.exr");
     auto t2 = std::chrono::high_resolution_clock::now();
-    auto his = traceRays(h, 0.5, WIDTH, HEIGHT, Vec3(0, -0.4, -5), 0, -0.04);
+    auto his = traceRays(h, 0.5, WIDTH, HEIGHT, Vec3(0, -0.4, -5), computeCameraBasis(0, -0.04));
     auto t3 = std::chrono::high_resolution_clock::now();
     writeImage(his, WIDTH, HEIGHT, "output.png", 0, background);
     auto t4 = std::chrono::high_resolution_clock::now();
     std::cout << duration(t1, t2) << " " << duration(t2, t3) << " " << duration(t3, t4) << std::endl << std::endl;
     for (int i = 0; i < frameCount; i++) {
         double phi = static_cast<double>(i - 89) / 180 * PI;
-        auto frameHis = traceRays(h, 0.5, WIDTH, HEIGHT, Vec3(-4 * sin(-phi), -0.2, -4 * cos(-phi)), phi, -0.05);
+        auto frameHis = traceRays(h, 0.5, WIDTH, HEIGHT, Vec3(-4 * sin(-phi), -0.2, -4 * cos(-phi)), computeCameraBasis(phi, -0.05));
         std::string filename = std::string(GR_SOURCE_DIR) + "/seq/output_" + std::to_string(i) + ".png";
         writeImage(frameHis, WIDTH, HEIGHT, filename.c_str(), static_cast<double>(i) * 0.05, background);
         std::cout << i << std::endl;
