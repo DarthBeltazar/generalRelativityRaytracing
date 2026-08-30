@@ -34,7 +34,7 @@ namespace {
     template<typename F>
     State rkf45Step(State y, double rs, double &h, double atol, double rtol, F accept) {
         bool isDisaccepted = false;
-        while (true) {
+        for (int i = 0; i < 10; i++) {
             const double s = 0.84;
             State k1 = f(y, rs) * h;
 
@@ -72,8 +72,11 @@ namespace {
 
                 const double h_opt = s * h * std::pow(1 / (err_norm + 1e-15), 0.2);
                 h = h * std::max(0.1, std::min(4.0, h_opt / h));
-                if (err_norm <= 1) {
+                if (!(err_norm > 1)) {
                     return y_next;
+                }
+                if (!(h>1e-4)) {
+                    h = 1e-4;
                 }
             } else {
                 if (!currentAccept) {
@@ -83,6 +86,8 @@ namespace {
                 }
             }
         }
+        h = 0;
+        return y;
     }
 
     template<typename T>

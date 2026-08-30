@@ -10,6 +10,7 @@
 #include "render/Renderer.h"
 #include <algorithm>
 #include "core/Constants.h"
+#include <iostream>
 
 int main(int, char**) {
     const int RW = 960;
@@ -38,7 +39,7 @@ int main(int, char**) {
             if (e.type == SDL_EVENT_QUIT) running = false;
             if (e.type == SDL_EVENT_MOUSE_MOTION && (e.motion.state & SDL_BUTTON_LMASK)) {
                 yaw += e.motion.xrel * sens;
-                pitch += e.motion.yrel * sens;
+                pitch -= e.motion.yrel * sens;
                 pitch = std::clamp(pitch, -PI*0.5, PI*0.5);
             }
         }
@@ -59,6 +60,7 @@ int main(int, char**) {
         if (keys[SDL_SCANCODE_D]) {
             pos = pos - basis.right*dt*speed;
         }
+        std::cout << 1000/dt << std::endl;
         prev = t1;
         std::vector<unsigned char> px = shade(traceRays(0.01, 0.5, RW, RH, pos, basis),
                                               RW, RH, duration(t0, t1)*0.0003, background);
