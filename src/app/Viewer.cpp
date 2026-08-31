@@ -16,8 +16,11 @@ int main(int, char**) {
     const int RW = 960;
     const int RH = 540;
     Background background;
-    background.load(GR_SOURCE_DIR "/background.exr");
-
+    try {
+        background.load(GR_SOURCE_DIR "/background.exr");
+    } catch (std::runtime_error e) {
+        background.load((std::string(SDL_GetBasePath()) + "background.exr").c_str());
+    }
     SDL_Init(SDL_INIT_VIDEO);
     SDL_Window *win = SDL_CreateWindow("GeneralRelativityRaytracing - Viewer", 1920, 1080, SDL_WINDOW_RESIZABLE);
     SDL_Renderer *ren = SDL_CreateRenderer(win, nullptr);
@@ -59,6 +62,12 @@ int main(int, char**) {
         }
         if (keys[SDL_SCANCODE_D]) {
             pos = pos - basis.right*dt*speed;
+        }
+        if (keys[SDL_SCANCODE_Q]) {
+            pos = pos + basis.up*dt*speed;
+        }
+        if (keys[SDL_SCANCODE_E]) {
+            pos = pos - basis.up*dt*speed;
         }
         std::cout << 1000/dt << std::endl;
         prev = t1;
