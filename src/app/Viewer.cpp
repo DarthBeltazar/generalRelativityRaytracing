@@ -13,8 +13,8 @@
 #include <iostream>
 
 int main(int, char**) {
-    const int RW = 960;
-    const int RH = 540;
+    const int RW = 640;
+    const int RH = 360;
     Background background;
     try {
         background.load(GR_SOURCE_DIR "/background.exr");
@@ -31,18 +31,18 @@ int main(int, char**) {
 
     double yaw = 0, pitch =- 0.04;
     Vec3 pos(0, -0.4, -5);
-    const double sens = 0.002;
+    const double sens = 0.00005;
     const double speed = 0.002;
     const auto t0 = std::chrono::high_resolution_clock::now();
-    double dt;
+    double dt = 0;
     auto prev = t0;
     while (running) {
         SDL_Event e;
         while (SDL_PollEvent(&e)) {
             if (e.type == SDL_EVENT_QUIT) running = false;
             if (e.type == SDL_EVENT_MOUSE_MOTION && (e.motion.state & SDL_BUTTON_LMASK)) {
-                yaw += e.motion.xrel * sens;
-                pitch -= e.motion.yrel * sens;
+                yaw += e.motion.xrel * sens * dt;
+                pitch -= e.motion.yrel * sens * dt;
                 pitch = std::clamp(pitch, -PI*0.5, PI*0.5);
             }
         }

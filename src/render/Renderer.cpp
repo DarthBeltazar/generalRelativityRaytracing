@@ -10,6 +10,8 @@
 #include <algorithm>
 #include <cmath>
 
+#include "core/Constants.h"
+
 namespace {
     struct Tile {
         int x0, y0, x1, y1; //[x0, x1), [y0, y1)
@@ -67,6 +69,16 @@ double duration(std::chrono::high_resolution_clock::time_point t1, std::chrono::
     return static_cast<std::chrono::duration<double, std::milli>>(t2 - t1).count();
 }
 
+struct Vec2 {
+    double x, y;
+    Vec2(double x, double y): x(x), y(y) {}
+    Vec2(): x(0), y(0) {}
+};
+
+inline double getFrac(double num) {
+    return num - std::floor(num);
+}
+
 std::vector<unsigned char> shade(const std::vector<HitInfo> &his, const int WIDTH, const int HEIGHT, double time,
                 const Background &background)  {
     std::vector<unsigned char> data(WIDTH * HEIGHT * 3);
@@ -83,10 +95,38 @@ std::vector<unsigned char> shade(const std::vector<HitInfo> &his, const int WIDT
         }
         y = y1;
     }
+    std::vector<Vec2> textels(his.size());
     std::vector<std::thread> threads(threadsNumber);
     std::atomic<int> nextIndex = 0;
     for (int i = 0; i < threadsNumber; i++) {
-        threads[i] = (std::thread(
+        threads[i] = std::thread(
+            [&]()-> void {
+                int index;
+                for (int j = 0; j < tiles.size(); j++) {
+                    index = nextIndex++;
+                    if (index >= tiles.size()) break;
+                    Tile tile = tiles[index];
+                    for (int y = tile.y0; y < tile.y1; y++) {
+                        for (int x = tile.x0; x < tile.x1; x++) {
+                            int i = y*WIDTH+x;
+                            const auto &hi = his[i];
+                            if (hi.hit) {textels[i] = Vec2(0.5, 0.5); continue;}
+
+                            const Vec3 dir = hi.dir;
+                            const double xt = getFrac((atan2(dir.z, dir.x) * RECIP_PI + 1.5) * 0.5);
+                            const double yt = getFrac(asin(dir.y) * RECIP_PI + 0.5);
+                            textels[i] = Vec2(xt, yt);
+                        }
+                    }
+                }
+            });
+    }
+    for (auto &t: threads) {
+        t.join();
+    }
+    nextIndex = 0;
+    for (int i = 0; i < threadsNumber; i++) {
+        threads[i] = std::thread(
             [&]()-> void {
                 int index;
                 for (int j = 0; j < tiles.size(); j++) {
@@ -115,7 +155,23 @@ std::vector<unsigned char> shade(const std::vector<HitInfo> &his, const int WIDT
                                 data[i * 3 + 2] = static_cast<unsigned char>(std::clamp(color.z, 0.0, 1.0) * 255);
                                 continue;
                             }
-                            color = (color + background.sample(hi.dir) * 35).custom([](double x) -> double { return pow(x, 0.45); });
+
+                            Vec3 backgroundColor(0, 0, 0);
+                            if (!hi.hit) {
+                                if (x == 0 || y == 0 || x == WIDTH-1 || y == HEIGHT-1) backgroundColor = background.sample(hi.dir);
+                                else {
+                                    double dx = abs(textels[i+1].x - textels[i-1].x)*0.25;
+                                    if (dx > 0.125) dx = 0.25 - dx;
+                                    double dy = abs(textels[i+WIDTH].y - textels[i-WIDTH].y)*0.25;
+                                    double x0 = textels[i].x - dx;
+                                    double x1 = textels[i].x + dx;
+                                    double y0 = textels[i].y - dy;
+                                    double y1 = textels[i].y + dy;
+                                    backgroundColor = background.sampleAA(x0, y0, x1, y1);
+                                }
+                            }
+
+                            color = (color + backgroundColor * 35).custom([](double x) -> double { return pow(x, 0.45); });
 
                             data[i * 3] = static_cast<unsigned char>(std::clamp(color.x, 0.0, 1.0) * 255);
                             data[i * 3 + 1] = static_cast<unsigned char>(std::clamp(color.y, 0.0, 1.0) * 255);
@@ -123,7 +179,7 @@ std::vector<unsigned char> shade(const std::vector<HitInfo> &his, const int WIDT
                         }
                     }
                 }
-            }));
+            });
     }
     for (auto &t: threads) {
         t.join();
