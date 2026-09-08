@@ -9,7 +9,7 @@ Vec3 discColor(Vec3 pos, double time) {
     double angle = atan2(pos.z, pos.x);
 
     const float R_IN = 1.5f;
-    const float R_OUT = 4.5;
+    const float R_OUT = 9.f;
 
     if (r < R_IN || r > R_OUT) return {0.0f, 0.0f, 0.0f};
 

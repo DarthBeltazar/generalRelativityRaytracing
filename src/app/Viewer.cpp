@@ -14,7 +14,7 @@
 
 int main(int, char**) {
     const int RW = 640;
-    const int RH = 360;
+    const int RH = 415;
     Background background;
     try {
         background.load(GR_SOURCE_DIR "/background.exr");
@@ -70,6 +70,7 @@ int main(int, char**) {
             pos = pos - basis.up*dt*speed;
         }
         std::cout << 1000/dt << std::endl;
+        std::cout << pos.x*2. << ", " << pos.y*2. << ", " << pos.z*2. << std::endl;
         prev = t1;
         std::vector<unsigned char> px = shade(traceRays(0.01, 0.5, RW, RH, pos, basis),
                                               RW, RH, duration(t0, t1)*0.0003, background);

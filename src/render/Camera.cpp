@@ -16,6 +16,6 @@ Ray generateRay(const int px, const int py, double width, double height, double 
                 const CameraBasis &basis) {
     double u = (2.0 * (px + 0.5) / width - 1.0) * aspect;
     double v = 1.0 - 2.0 * (py + 0.5) / height;
-    Vec3 direction = (basis.right * u + basis.up * v + basis.forward).normalize();
+    Vec3 direction = (basis.right * u + basis.up * v + basis.forward*5).normalize();
     return Ray(origin, direction);
 }

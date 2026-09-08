@@ -157,19 +157,19 @@ std::vector<unsigned char> shade(const std::vector<HitInfo> &his, const int WIDT
                             }
 
                             Vec3 backgroundColor(0, 0, 0);
-                            if (!hi.hit) {
-                                if (x == 0 || y == 0 || x == WIDTH-1 || y == HEIGHT-1) backgroundColor = background.sample(hi.dir);
-                                else {
-                                    double dx = abs(textels[i+1].x - textels[i-1].x)*0.25;
-                                    if (dx > 0.125) dx = 0.25 - dx;
-                                    double dy = abs(textels[i+WIDTH].y - textels[i-WIDTH].y)*0.25;
-                                    double x0 = textels[i].x - dx;
-                                    double x1 = textels[i].x + dx;
-                                    double y0 = textels[i].y - dy;
-                                    double y1 = textels[i].y + dy;
-                                    backgroundColor = background.sampleAA(x0, y0, x1, y1);
-                                }
-                            }
+                            // if (!hi.hit) {
+                            //     if (x == 0 || y == 0 || x == WIDTH-1 || y == HEIGHT-1) backgroundColor = background.sample(hi.dir);
+                            //     else {
+                            //         double dx = abs(textels[i+1].x - textels[i-1].x)*0.25;
+                            //         if (dx > 0.125) dx = 0.25 - dx;
+                            //         double dy = abs(textels[i+WIDTH].y - textels[i-WIDTH].y)*0.25;
+                            //         double x0 = textels[i].x - dx;
+                            //         double x1 = textels[i].x + dx;
+                            //         double y0 = textels[i].y - dy;
+                            //         double y1 = textels[i].y + dy;
+                            //         backgroundColor = background.sampleAA(x0, y0, x1, y1);
+                            //     }
+                            // }
 
                             color = (color + backgroundColor * 35).custom([](double x) -> double { return pow(x, 0.45); });
 
