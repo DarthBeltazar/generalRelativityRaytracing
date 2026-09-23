@@ -34,6 +34,7 @@ namespace {
     template<typename F>
     State rkf45Step(State y, double rs, double &h, double atol, double rtol, F accept) {
         bool isDisaccepted = false;
+        h = std::max(h, 1e-4);
         for (int i = 0; i < 10; i++) {
             const double s = 0.84;
             State k1 = f(y, rs) * h;
@@ -59,7 +60,7 @@ namespace {
                                         + k6 * (2.0 / 55.0);
 
             bool currentAccept = accept(y_next);
-            isDisaccepted = !currentAccept || isDisaccepted;
+            isDisaccepted = !currentAccept;
             if (!isDisaccepted) {
                 State error = k1 * (1.0 / 360.0)
                             + k3 * (-128.0 / 4275.0)
@@ -68,7 +69,7 @@ namespace {
                             + k6 * (2.0 / 55.0);
                 const double tol_u = atol + rtol * abs(y_next.u);
                 const double tol_w = atol + rtol * abs(y_next.w);
-                const double err_norm = std::max(abs(error.u)/tol_u, abs(error.w)/tol_w);
+                const double err_norm = std::max(std::abs(error.u)/tol_u, abs(error.w)/tol_w);
 
                 const double h_opt = s * h * std::pow(1 / (err_norm + 1e-15), 0.2);
                 h = h * std::max(0.1, std::min(4.0, h_opt / h));
@@ -117,14 +118,15 @@ HitInfo traceRay(const double h0, const double rs, const Vec3 &bhpos, const Ray 
 
     HitInfo hi;
     int steps = 0;
-    Vec3 prev = positionAt(y);
-    Vec3 prevPrev = prev;
-    Vec3 current = prev;
+    Vec3 current = positionAt(y);
+    Vec3 prevPos = current;
+    Vec3 prevPrevPos = current;
     auto h = h0;
     for (int i = 0; i < 1000; i++) {
         double prevCosI = cosI;
         double prevSinI = sinI;
-        prevPrev = current;
+        prevPrevPos = prevPos;
+        prevPos = current;
         const double h_used = h;
         y = rkf45Step(y, rs, h, 1e-7, 1e-7, [&](const State &s) -> bool {
             double cosH, sinH;
@@ -139,19 +141,18 @@ HitInfo traceRay(const double h0, const double rs, const Vec3 &bhpos, const Ray 
             cosI = prevCosI * cosH - prevSinI * sinH;
             sinI = prevSinI * cosH + prevCosI * sinH;
             current = positionAt(s);
-            return (current.y * prev.y > -current.squaredLength()/(rs*rs));
+            return (current.y * prevPos.y > -current.squaredLength()/(rs*rs));
         });
         steps++;
         if (observer) {
             observer(steps, current.length(), h_used);
         }
 
-        if (current.y * prev.y < 0 && y.u > 0) {
-            Vec3 delta = current - prev;
-            hi.pos.push_back(prev - delta * prev.y * (1. / delta.y));
+        if (current.y * prevPos.y < 0 && y.u > 0) {
+            Vec3 delta = current - prevPos;
+            hi.pos.push_back(prevPos - delta * prevPos.y * (1. / delta.y));
             hi.discHit = true;
         }
-        prev = current;
 
         if (y.u >= 1 / rs || y.u <= 0) {
             break;
@@ -160,7 +161,7 @@ HitInfo traceRay(const double h0, const double rs, const Vec3 &bhpos, const Ray 
 
     hi.hit = y.u >= 1 / rs;
     if (!hi.hit) {
-        hi.dir = (current - prevPrev).normalize();
+        hi.dir = (prevPos - prevPrevPos).normalize();
     }
     hi.t = steps + 1;
     return hi;
