@@ -19,4 +19,7 @@ void renderImage(int WIDTH, int HEIGHT, const char *filename, double h, double r
 std::vector<unsigned char> shade(const std::vector<HitInfo> &his, int WIDTH, int HEIGHT, double time,
                                  const Background &background);
 
+std::vector<unsigned char> shadeMagnification(const std::vector<HitInfo> &his, int WIDTH, int HEIGHT,
+                                              const CameraBasis &basis);
+
 double duration(std::chrono::high_resolution_clock::time_point t1, std::chrono::high_resolution_clock::time_point t2);

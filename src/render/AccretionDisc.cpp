@@ -30,11 +30,8 @@ Vec3 discColor(Vec3 pos, double time) {
 
 
     Vec3 finalColor = {0.0f, 0.0f, 0.0f};
-
-    if (currentTemperature > 0.05f) {
-        finalColor.x = std::clamp(currentTemperature * 3.0f, 0.0f, 1.0f);
-        finalColor.y = std::clamp((currentTemperature - 0.2f) * 2.5f, 0.0f, 1.0f);
-        finalColor.z = std::clamp((currentTemperature - 0.6f) * 4.0f, 0.0f, 1.0f);
-    }
+    finalColor.x = std::clamp(currentTemperature * 3.0f, 0.0f, 1.0f);
+    finalColor.y = std::clamp((currentTemperature - 0.2f) * 2.5f, 0.0f, 1.0f);
+    finalColor.z = std::clamp((currentTemperature - 0.6f) * 4.0f, 0.0f, 1.0f);
     return finalColor;
 }

@@ -9,6 +9,7 @@
 #include <thread>
 #include <algorithm>
 #include <cmath>
+#include <limits>
 
 #include "core/Constants.h"
 
@@ -17,11 +18,14 @@ namespace {
         int x0, y0, x1, y1; //[x0, x1), [y0, y1)
         Tile (int x0, int x1, int y0, int y1): x0(x0), x1(x1), y0(y0), y1(y1) {};
     };
+    unsigned int workerThreadCount() {
+        return static_cast<unsigned int>(std::max(1, static_cast<int>(std::thread::hardware_concurrency()) - 2));
+    }
 }
 
 std::vector<HitInfo> traceRays(const double h, const double rs, const int width, const int height, const Vec3 &bhpos,
                                const CameraBasis &basis) {
-    const unsigned int threadsNumber = std::max(1u, std::thread::hardware_concurrency() - 2);
+    const unsigned int threadsNumber = workerThreadCount();
 
     constexpr int tileSize = 32;
     std::vector<Tile> tiles;
@@ -79,10 +83,25 @@ inline double getFrac(double num) {
     return num - std::floor(num);
 }
 
+inline double footprintHalfSize(const std::vector<HitInfo> &his, const std::vector<Vec2> &textels, const int i,
+                                const int stride, double Vec2::*axis, const bool wrap) {
+    auto delta = [&](const int a, const int b) {
+        double d = std::abs(textels[a].*axis - textels[b].*axis);
+        if (wrap && d > 0.5) d = 1 - d;
+        return d;
+    };
+    const bool prevOk = !his[i - stride].hit;
+    const bool nextOk = !his[i + stride].hit;
+    if (prevOk && nextOk) return delta(i + stride, i - stride) * 0.25;
+    if (prevOk) return delta(i, i - stride) * 0.5;
+    if (nextOk) return delta(i + stride, i) * 0.5;
+    return 0;
+}
+
 std::vector<unsigned char> shade(const std::vector<HitInfo> &his, const int WIDTH, const int HEIGHT, double time,
                 const Background &background)  {
     std::vector<unsigned char> data(WIDTH * HEIGHT * 3);
-    const unsigned int threadsNumber = std::max(1u, std::thread::hardware_concurrency() - 2);
+    const unsigned int threadsNumber = workerThreadCount();
 
     constexpr int tileSize = 64;
     std::vector<Tile> tiles;
@@ -149,20 +168,12 @@ std::vector<unsigned char> shade(const std::vector<HitInfo> &his, const int WIDT
                                     color = color + discColor(p, time);
                                 }
                             }
-                            if (hi.hit) {
-                                data[i * 3] = static_cast<unsigned char>(std::clamp(color.x, 0.0, 1.0) * 255);
-                                data[i * 3 + 1] = static_cast<unsigned char>(std::clamp(color.y, 0.0, 1.0) * 255);
-                                data[i * 3 + 2] = static_cast<unsigned char>(std::clamp(color.z, 0.0, 1.0) * 255);
-                                continue;
-                            }
-
                             Vec3 backgroundColor(0, 0, 0);
                             if (!hi.hit) {
                                 if (x == 0 || y == 0 || x == WIDTH-1 || y == HEIGHT-1) backgroundColor = background.sample(hi.dir);
                                 else {
-                                    double dx = abs(textels[i+1].x - textels[i-1].x)*0.25;
-                                    if (dx > 0.125) dx = 0.25 - dx;
-                                    double dy = abs(textels[i+WIDTH].y - textels[i-WIDTH].y)*0.25;
+                                    const double dx = footprintHalfSize(his, textels, i, 1, &Vec2::x, true);
+                                    const double dy = footprintHalfSize(his, textels, i, WIDTH, &Vec2::y, false);
                                     double x0 = textels[i].x - dx;
                                     double x1 = textels[i].x + dx;
                                     double y0 = textels[i].y - dy;
@@ -183,6 +194,75 @@ std::vector<unsigned char> shade(const std::vector<HitInfo> &his, const int WIDT
     }
     for (auto &t: threads) {
         t.join();
+    }
+    return data;
+}
+
+template<typename F>
+bool pixelDerivative(const F &value, const int i, const int stride, const bool prevOk, const bool nextOk, Vec3 &out) {
+    if (prevOk && nextOk) out = (value(i + stride) - value(i - stride)) * 0.5;
+    else if (nextOk) out = value(i + stride) - value(i);
+    else if (prevOk) out = value(i) - value(i - stride);
+    else return false;
+    return true;
+}
+
+std::vector<unsigned char> shadeMagnification(const std::vector<HitInfo> &his, const int WIDTH, const int HEIGHT,
+                                              const CameraBasis &basis) {
+    const Vec3 white(1, 1, 1);
+    const Vec3 demagnified(0.1, 0.3, 1.0);
+    const Vec3 magnified(1.0, 0.25, 0.05);
+
+    const double widthd = WIDTH;
+    const double heightd = HEIGHT;
+    const double aspect = widthd / heightd;
+    auto cameraDir = [&](const int idx) {
+        return generateRay(idx % WIDTH, idx / WIDTH, widthd, heightd, aspect, Vec3(), basis).dir;
+    };
+    auto skyDir = [&](const int idx) { return his[idx].dir; };
+
+    std::vector<double> logMu(WIDTH * HEIGHT, std::numeric_limits<double>::quiet_NaN());
+    std::vector<double> absLogMu;
+    absLogMu.reserve(WIDTH * HEIGHT);
+    for (int y = 0; y < HEIGHT; y++) {
+        for (int x = 0; x < WIDTH; x++) {
+            const int i = y * WIDTH + x;
+            if (his[i].hit) continue;
+
+            Vec3 skyDx, skyDy;
+            if (!pixelDerivative(skyDir, i, 1, x > 0 && !his[i - 1].hit, x < WIDTH - 1 && !his[i + 1].hit, skyDx) ||
+                !pixelDerivative(skyDir, i, WIDTH, y > 0 && !his[i - WIDTH].hit, y < HEIGHT - 1 && !his[i + WIDTH].hit, skyDy)) {
+                continue;
+            }.
+            Vec3 camDx, camDy;
+            pixelDerivative(cameraDir, i, 1, x > 0, x < WIDTH - 1, camDx);
+            pixelDerivative(cameraDir, i, WIDTH, y > 0, y < HEIGHT - 1, camDy);
+
+            const double skyArea = skyDx.cross(skyDy).length();
+            const double camArea = camDx.cross(camDy).length();
+            logMu[i] = std::log2(camArea / skyArea);
+
+            if (std::isfinite(logMu[i])) absLogMu.push_back(std::abs(logMu[i]));
+        }
+    }
+
+    constexpr double percentile = 0.99;
+    double scaleLogMu = 0;
+    if (!absLogMu.empty()) {
+        const auto nth = absLogMu.begin() + static_cast<std::ptrdiff_t>(percentile * (absLogMu.size() - 1));
+        std::nth_element(absLogMu.begin(), nth, absLogMu.end());
+        scaleLogMu = *nth;
+    }
+    const double c = scaleLogMu > 0 ? 1 / scaleLogMu : 0;
+    std::vector<unsigned char> data(WIDTH * HEIGHT * 3, 0);
+    for (int i = 0; i < WIDTH * HEIGHT; i++) {
+        if (std::isnan(logMu[i])) continue;
+        const double t = std::clamp(logMu[i] * c, -1.0, 1.0);
+        const Vec3 color = t < 0 ? white + (demagnified - white) * -t : white + (magnified - white) * t;
+
+        data[i * 3] = static_cast<unsigned char>(std::clamp(color.x, 0.0, 1.0) * 255);
+        data[i * 3 + 1] = static_cast<unsigned char>(std::clamp(color.y, 0.0, 1.0) * 255);
+        data[i * 3 + 2] = static_cast<unsigned char>(std::clamp(color.z, 0.0, 1.0) * 255);
     }
     return data;
 }

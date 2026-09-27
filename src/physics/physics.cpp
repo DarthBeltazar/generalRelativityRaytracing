@@ -1,5 +1,7 @@
 #include "physics.h"
+#include "core/Constants.h"
 
+#include <algorithm>
 #include <cmath>
 
 Ray::Ray(Vec3 origin, Vec3 dir) : origin(origin), dir(dir) {
@@ -31,12 +33,12 @@ namespace {
         return y_next;
     }
 
-    template<typename F>
-    State rkf45Step(State y, double rs, double &h, double atol, double rtol, F accept) {
-        bool isDisaccepted = false;
-        h = std::max(h, 1e-4);
-        for (int i = 0; i < 10; i++) {
-            const double s = 0.84;
+    State rkf45Step(const State &y, double rs, double &h, double &hUsed, double atol, double rtol) {
+        constexpr double s = 0.84;
+        constexpr double hMin = 1e-4;
+        constexpr double hMax = 0.5;
+        h = std::clamp(h, hMin, hMax);
+        while (true) {
             State k1 = f(y, rs) * h;
 
             State k2 = f(y + k1 * (1.0 / 4.0), rs) * h;
@@ -59,36 +61,22 @@ namespace {
                                         + k5 * (-9.0 / 50.0)
                                         + k6 * (2.0 / 55.0);
 
-            bool currentAccept = accept(y_next);
-            isDisaccepted = !currentAccept;
-            if (!isDisaccepted) {
-                State error = k1 * (1.0 / 360.0)
-                            + k3 * (-128.0 / 4275.0)
-                            + k4 * (-2197.0 / 75240.0)
-                            + k5 * (1.0 / 50.0)
-                            + k6 * (2.0 / 55.0);
-                const double tol_u = atol + rtol * abs(y_next.u);
-                const double tol_w = atol + rtol * abs(y_next.w);
-                const double err_norm = std::max(std::abs(error.u)/tol_u, abs(error.w)/tol_w);
+            State error = k1 * (1.0 / 360.0)
+                        + k3 * (-128.0 / 4275.0)
+                        + k4 * (-2197.0 / 75240.0)
+                        + k5 * (1.0 / 50.0)
+                        + k6 * (2.0 / 55.0);
+            const double tol_u = atol + rtol * std::abs(y_next.u);
+            const double tol_w = atol + rtol * std::abs(y_next.w);
+            const double err_norm = std::max(std::abs(error.u)/tol_u, std::abs(error.w)/tol_w);
 
-                const double h_opt = s * h * std::pow(1 / (err_norm + 1e-15), 0.2);
-                h = h * std::max(0.1, std::min(4.0, h_opt / h));
-                if (!(err_norm > 1)) {
-                    return y_next;
-                }
-                if (!(h>1e-4)) {
-                    h = 1e-4;
-                }
-            } else {
-                if (!currentAccept) {
-                    h *= 0.5;
-                } else {
-                    return y_next;
-                }
+            hUsed = h;
+            const double h_opt = s * h * std::pow(1 / (err_norm + 1e-15), 0.2);
+            h = std::clamp(h * std::max(0.1, std::min(4.0, h_opt / h)), hMin, hMax);
+            if (!(err_norm > 1) || hUsed <= hMin) {
+                return y_next;
             }
         }
-        h = 0;
-        return y;
     }
 
     template<typename T>
@@ -109,49 +97,69 @@ HitInfo traceRay(const double h0, const double rs, const Vec3 &bhpos, const Ray 
     Vec3 e_t = r_vec.cross(ray.dir).cross(r_vec).normalize();
     Vec3 e_r = r_vec.normalize();
 
+    auto directionAt = [&](const double cosPhi, const double sinPhi) {
+        return e_r * cosPhi + e_t * sinPhi;
+    };
+    auto rotate = [](double &cosPhi, double &sinPhi, const double da) {
+        const double c = std::cos(da), s = std::sin(da);
+        const double cosNew = cosPhi * c - sinPhi * s;
+        sinPhi = sinPhi * c + cosPhi * s;
+        cosPhi = cosNew;
+    };
+
     //sin and cos of sum optimization - faster than calculate them for each state
     double cosI = 1.0;
     double sinI = 0.0;
-    auto positionAt = [&](const State &s) {
-        return (e_r * cosI + e_t * sinI) * (1 / s.u);
-    };
 
     HitInfo hi;
     int steps = 0;
-    Vec3 current = positionAt(y);
-    Vec3 prevPos = current;
-    Vec3 prevPrevPos = current;
+    State yPrev = y;
+    double prevCosI = cosI;
+    double prevSinI = sinI;
     auto h = h0;
     for (int i = 0; i < 1000; i++) {
-        double prevCosI = cosI;
-        double prevSinI = sinI;
-        prevPrevPos = prevPos;
-        prevPos = current;
-        const double h_used = h;
-        y = rkf45Step(y, rs, h, 1e-7, 1e-7, [&](const State &s) -> bool {
-            double cosH, sinH;
-            if (h < 0.1) {
-                cosH = 1 - 0.5 * h * h;
-                sinH = h - 1./6 * h * h * h;
-            }
-            else {
-                cosH = cos(h);
-                sinH = sin(h);
-            }
-            cosI = prevCosI * cosH - prevSinI * sinH;
-            sinI = prevSinI * cosH + prevCosI * sinH;
-            current = positionAt(s);
-            return (current.y * prevPos.y > -current.squaredLength()/(rs*rs));
-        });
+        prevCosI = cosI;
+        prevSinI = sinI;
+        yPrev = y;
+        const double h_requested = h;
+        double hStep;
+        y = rkf45Step(y, rs, h, hStep, 1e-7, 1e-7);
+
+        double cosH, sinH;
+        if (hStep < 0.1) {
+            cosH = 1 - 0.5 * hStep * hStep;
+            sinH = hStep - 1./6 * hStep * hStep * hStep;
+        }
+        else {
+            cosH = cos(hStep);
+            sinH = sin(hStep);
+        }
+        cosI = prevCosI * cosH - prevSinI * sinH;
+        sinI = prevSinI * cosH + prevCosI * sinH;
+
         steps++;
         if (observer) {
-            observer(steps, current.length(), h_used);
+            observer(steps, 1 / std::abs(y.u), h_requested);
         }
 
-        if (current.y * prevPos.y < 0 && y.u > 0) {
-            Vec3 delta = current - prevPos;
-            hi.pos.push_back(prevPos - delta * prevPos.y * (1. / delta.y));
-            hi.discHit = true;
+
+        if (yPrev.u > 0 && y.u > 0) {
+            const double gPrev = e_r.y * prevCosI + e_t.y * prevSinI;
+            const double gCur = e_r.y * cosI + e_t.y * sinI;
+            if (gPrev * gCur < 0) {
+                const double dgPrev = -e_r.y * prevSinI + e_t.y * prevCosI;
+
+                double a = std::atan2(gPrev, -dgPrev);
+                if (a <= 0) a += PI;
+                const double t = std::clamp(a / hStep, 0.0, 1.0);
+                const double t2 = t * t, t3 = t2 * t;
+                const double u = (2 * t3 - 3 * t2 + 1) * yPrev.u + (t3 - 2 * t2 + t) * hStep * yPrev.w
+                               + (-2 * t3 + 3 * t2) * y.u + (t3 - t2) * hStep * y.w;
+                double cosC = prevCosI, sinC = prevSinI;
+                rotate(cosC, sinC, a);
+                hi.pos.push_back(directionAt(cosC, sinC) * (1 / u));
+                hi.discHit = true;
+            }
         }
 
         if (y.u >= 1 / rs || y.u <= 0) {
@@ -161,7 +169,16 @@ HitInfo traceRay(const double h0, const double rs, const Vec3 &bhpos, const Ray 
 
     hi.hit = y.u >= 1 / rs;
     if (!hi.hit) {
-        hi.dir = (prevPos - prevPrevPos).normalize();
+        const bool usePrev = std::abs(yPrev.u) < std::abs(y.u);
+        const State &yEnd = usePrev ? yPrev : y;
+        double cosE = usePrev ? prevCosI : cosI;
+        double sinE = usePrev ? prevSinI : sinI;
+        if (yEnd.w < 0) {
+            rotate(cosE, sinE, std::atan2(yEnd.u, -yEnd.w));
+            hi.dir = directionAt(cosE, sinE);
+        } else {
+            hi.dir = (directionAt(-sinE, cosE) * yEnd.u - directionAt(cosE, sinE) * yEnd.w).normalize();
+        }
     }
     hi.t = steps + 1;
     return hi;

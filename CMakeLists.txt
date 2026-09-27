@@ -30,6 +30,15 @@ set(SDL_STATIC ON CACHE BOOL "" FORCE)
 set(SDL_SHARED OFF CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(SDL3)
 
+FetchContent_Declare(
+        vk-bootstrap
+        GIT_REPOSITORY https://github.com/charles-lunarg/vk-bootstrap.git
+        GIT_TAG v1.4.328
+        GIT_SHALLOW TRUE
+)
+FetchContent_MakeAvailable(vk-bootstrap)
+find_package(Vulkan REQUIRED)
+
 add_executable(grRaytracing
         src/main.cpp
         src/core/Constants.h
@@ -94,9 +103,15 @@ target_include_directories(viewer PRIVATE
 )
 target_link_libraries(viewer PRIVATE SDL3::SDL3-static)
 
+add_executable(gpu_test
+        src/gpu/gpu_test.cpp
+)
+target_link_libraries(gpu_test PRIVATE vk-bootstrap::vk-bootstrap ${CMAKE_DL_LIBS} Vulkan::Vulkan)
+
 if (CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
     target_compile_options(grRaytracing PRIVATE -fno-omit-frame-pointer -static -static-libgcc -static-libstdc++)
 endif()
 
 target_compile_definitions(grRaytracing PRIVATE GR_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 target_compile_definitions(viewer PRIVATE GR_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+target_compile_definitions(gpu_test PRIVATE GR_SOURCE_DIR="${CMAKE_SOURCE_DIR}")

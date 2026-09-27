@@ -10,6 +10,8 @@
 #include "render/Renderer.h"
 #include <algorithm>
 #include "core/Constants.h"
+#include <cmath>
+#include <cstdio>
 #include <iostream>
 
 int main(int, char**) {
@@ -28,6 +30,19 @@ int main(int, char**) {
     SDL_Texture *tex = SDL_CreateTexture(ren, SDL_PIXELFORMAT_RGB24, SDL_TEXTUREACCESS_STREAMING, RW, RH);
 
     bool running = true;
+    bool showMagnification = false;
+
+    double focalLength = 1.0;
+    const double zoomStep = 1.1;
+    const double minFocalLength = fovToFocalLength(160 * PI / 180);
+    const double maxFocalLength = fovToFocalLength(5 * PI / 180);
+    auto updateTitle = [&]() {
+        char title[128];
+        std::snprintf(title, sizeof(title), "GeneralRelativityRaytracing - Viewer | FOV %.1f\xC2\xB0%s",
+                      focalLengthToFov(focalLength) * 180 / PI, showMagnification ? " | magnification map" : "");
+        SDL_SetWindowTitle(win, title);
+    };
+    updateTitle();
 
     double yaw = 0, pitch =- 0.04;
     Vec3 pos(0, -0.4, -5);
@@ -40,17 +55,26 @@ int main(int, char**) {
         SDL_Event e;
         while (SDL_PollEvent(&e)) {
             if (e.type == SDL_EVENT_QUIT) running = false;
+            if (e.type == SDL_EVENT_KEY_DOWN && !e.key.repeat && e.key.scancode == SDL_SCANCODE_M) {
+                showMagnification = !showMagnification;
+                updateTitle();
+            }
+            if (e.type == SDL_EVENT_MOUSE_WHEEL && e.wheel.y != 0) {
+                focalLength = std::clamp(focalLength * std::pow(zoomStep, e.wheel.y), minFocalLength, maxFocalLength);
+                updateTitle();
+            }
             if (e.type == SDL_EVENT_MOUSE_MOTION && (e.motion.state & SDL_BUTTON_LMASK)) {
-                yaw += e.motion.xrel * sens * dt;
-                pitch -= e.motion.yrel * sens * dt;
-                pitch = std::clamp(pitch, -PI*0.5, PI*0.5);
+                const double lookSens = sens / focalLength;
+                yaw += e.motion.xrel * lookSens * dt;
+                pitch -= e.motion.yrel * lookSens * dt;
+                pitch = std::clamp(pitch, -PI*0.5 + 1e-3, PI*0.5 - 1e-3);
             }
         }
 
         const auto t1 = std::chrono::high_resolution_clock::now();
         dt = duration(prev, t1);
         const bool *keys = SDL_GetKeyboardState(nullptr);
-        CameraBasis basis = computeCameraBasis(yaw, pitch);
+        CameraBasis basis = computeCameraBasis(yaw, pitch, focalLength);
         if (keys[SDL_SCANCODE_W]) {
             pos = pos - basis.forward*dt*speed;
         }
@@ -71,8 +95,10 @@ int main(int, char**) {
         }
         std::cout << 1000/dt << std::endl;
         prev = t1;
-        std::vector<unsigned char> px = shade(traceRays(0.01, 0.5, RW, RH, pos, basis),
-                                              RW, RH, duration(t0, t1)*0.0003, background);
+        const std::vector<HitInfo> his = traceRays(0.01, 0.5, RW, RH, pos, basis);
+        std::vector<unsigned char> px = showMagnification
+                                            ? shadeMagnification(his, RW, RH, basis)
+                                            : shade(his, RW, RH, duration(t0, t1)*0.0003, background);
         SDL_UpdateTexture(tex, nullptr, px.data(), RW * 3);
 
         SDL_RenderClear(ren);
