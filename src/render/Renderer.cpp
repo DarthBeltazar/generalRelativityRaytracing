@@ -233,7 +233,7 @@ std::vector<unsigned char> shadeMagnification(const std::vector<HitInfo> &his, c
             if (!pixelDerivative(skyDir, i, 1, x > 0 && !his[i - 1].hit, x < WIDTH - 1 && !his[i + 1].hit, skyDx) ||
                 !pixelDerivative(skyDir, i, WIDTH, y > 0 && !his[i - WIDTH].hit, y < HEIGHT - 1 && !his[i + WIDTH].hit, skyDy)) {
                 continue;
-            }.
+            }
             Vec3 camDx, camDy;
             pixelDerivative(cameraDir, i, 1, x > 0, x < WIDTH - 1, camDx);
             pixelDerivative(cameraDir, i, WIDTH, y > 0, y < HEIGHT - 1, camDy);
